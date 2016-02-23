@@ -10,9 +10,37 @@ import sys
 import find_out_own_id
 from multiprocessing import Pool
 import wait_for_kafka_startup
-import generate_zk_conn_str
-
+from kazoo.client import KazooClient
 from health import HealthServer
+import boto3
+
+
+def generate_zk_conn_str(stack_name, region=None):
+    return generate_zk_conn_str_from_stack_name(stack_name, region) + os.getenv('ZOOKEEPER_PREFIX', '')
+
+
+def generate_zk_conn_str_from_stack_name(stack_name, region=None):
+    private_ips = []
+
+    if region is not None:
+        elb = boto3.client('elb', region_name=region)
+        ec2 = boto3.client('ec2', region_name=region)
+
+        response = elb.describe_instance_health(LoadBalancerName=stack_name)
+
+        for instance in response['InstanceStates']:
+            if instance['State'] == 'InService':
+                private_ips.append(ec2.describe_instances(
+                    InstanceIds=[instance['InstanceId']])['Reservations'][0]['Instances'][0]['PrivateIpAddress'])
+
+    else:
+        private_ips = [stack_name]
+
+    zk_conn_str = ''
+    for ip in private_ips:
+        zk_conn_str += ip + ':2181,'
+
+    return zk_conn_str[:-1]
 
 kafka_dir = os.getenv('KAFKA_DIR')
 
@@ -27,7 +55,7 @@ except requests.exceptions.ConnectionError:
     logging.info("Seems like this is a local environment, we will run now in local mode")
     region = None
 
-zk_conn_str = generate_zk_conn_str.run(os.getenv('ZOOKEEPER_STACK_NAME'), region)
+zk_conn_str = generate_zk_conn_str(os.getenv('ZOOKEEPER_STACK_NAME'), region)
 os.environ['ZOOKEEPER_CONN_STRING'] = zk_conn_str
 
 logging.info("Got ZooKeeper connection string: " + zk_conn_str)
@@ -57,13 +85,22 @@ get_remote_config(kafka_dir + "/config/server.properties", os.getenv('SERVER_PRO
 get_remote_config(kafka_dir + "/config/log4j.properties", os.getenv('LOG4J_PROPERTIES'))
 
 create_broker_properties(zk_conn_str)
+
+# create chroot if not existent
+
+zk = KazooClient(hosts=generate_zk_conn_str_from_stack_name(os.getenv('ZOOKEEPER_STACK_NAME'), region))
+zk.start()
+if (zk.exists(os.getenv('ZOOKEEPER_PREFIX'), watch=None) is None):
+    zk.create(os.getenv('ZOOKEEPER_PREFIX'))
+zk.stop()
+zk.close()
+
 broker_id = find_out_own_id.run()
 
 
 def check_broker_id_in_zk(broker_id, process):
     import requests
     from time import sleep
-    from kazoo.client import KazooClient
     zk_conn_str = os.getenv('ZOOKEEPER_CONN_STRING')
     while True:
         if os.getenv('WAIT_FOR_KAFKA') != 'no':
@@ -71,7 +108,7 @@ def check_broker_id_in_zk(broker_id, process):
             wait_for_kafka_startup.run(ip)
             os.environ['WAIT_FOR_KAFKA'] = 'no'
 
-        new_zk_conn_str = generate_zk_conn_str.run(os.getenv('ZOOKEEPER_STACK_NAME'), region)
+        new_zk_conn_str = generate_zk_conn_str(os.getenv('ZOOKEEPER_STACK_NAME'), region)
         if zk_conn_str != new_zk_conn_str:
             logging.warning("ZooKeeper connection string changed!")
             zk_conn_str = new_zk_conn_str
