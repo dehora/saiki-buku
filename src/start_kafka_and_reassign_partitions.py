@@ -6,6 +6,7 @@ import os
 import signal
 import subprocess
 import sys
+import time
 import multiprocessing
 
 import requests
@@ -21,14 +22,22 @@ kafka_dir = os.getenv('KAFKA_DIR')
 
 logging.basicConfig(level=getattr(logging, 'INFO', None))
 
-try:
-    logging.info("Checking if we are on AWS or not ...")
-    response = requests.get('http://169.254.169.254/latest/dynamic/instance-identity/document', timeout=5)
-    json = response.json()
-    region = json['region']
-except requests.exceptions.ConnectionError:
-    logging.info("Seems like this is a local environment, we will run now in local mode")
-    region = None
+startup_delay = int(os.getenv('STARTUP_DELAY', '0'))
+if startup_delay > 0:
+    time.sleep(startup_delay)
+
+
+def get_aws_region():
+    try:
+        logging.info("Checking if we are on AWS or not ...")
+        response = requests.get('http://169.254.169.254/latest/dynamic/instance-identity/document', timeout=5)
+        json = response.json()
+        return json['region']
+    except requests.exceptions.ConnectionError:
+        logging.info("Seems like this is a local environment, we will run now in local mode")
+        return None
+
+region = get_aws_region()
 
 zk_conn_str = generate_zk_conn_str.run(os.getenv('ZOOKEEPER_STACK_NAME'), region)
 os.environ['ZOOKEEPER_CONN_STRING'] = zk_conn_str
@@ -48,7 +57,7 @@ get_remote_config(kafka_dir + "/config/server.properties", os.getenv('SERVER_PRO
 get_remote_config(kafka_dir + "/config/log4j.properties", os.getenv('LOG4J_PROPERTIES'))
 
 create_broker_properties(zk_conn_str)
-broker_id = find_out_own_id.run()
+broker_id = find_out_own_id.get_broker_id_by_ip()
 
 
 HealthServer().start()

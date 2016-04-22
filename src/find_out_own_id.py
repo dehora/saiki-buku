@@ -19,7 +19,7 @@ def get_broker_unique_id(broker_id):
     return broker_id
 
 
-def run():
+def get_broker_id_by_ip():
     config_file = os.getenv('KAFKA_DIR') + '/config/server.properties'
     url = 'http://169.254.169.254/latest/dynamic/instance-identity/document'
     try:

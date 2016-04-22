@@ -1,0 +1,22 @@
+version: '2'
+
+services:
+  exhibitor:
+    image: registry.opensource.zalan.do/acid/exhibitor:3.4-p5
+    ports:
+      - "2181:2181"
+      - "8181:8181"
+  kafka:
+    image: kafka
+    environment:
+      - JMX_PORT=8004
+      - ZOOKEEPER_STACK_NAME=zookeeper.local
+      - EXHIBITOR_HOST=zookeeper.local
+      - ZOOKEEPER_PREFIX=/buku
+      - REASSIGN_PARTITIONS=yes
+      - STARTUP_DELAY=60
+    ports:
+      - "8004:8004"
+      - "9092:9092"
+    links:
+      - exhibitor:zookeeper.local

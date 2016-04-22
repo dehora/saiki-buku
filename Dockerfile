@@ -19,6 +19,7 @@ RUN chmod 777 /tmp/download_kafka.sh
 
 RUN /tmp/download_kafka.sh
 RUN tar xf /tmp/kafka_${SCALA_VERSION}-${KAFKA_VERSION}.tgz -C /opt
+RUN rm -rf /tmp/kafka_${SCALA_VERSION}-${KAFKA_VERSION}.tgz
 RUN mv $KAFKA_TMP_DIR $KAFKA_DIR
 
 RUN mkdir -p /data/kafka-logs
