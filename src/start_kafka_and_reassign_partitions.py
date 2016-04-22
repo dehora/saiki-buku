@@ -11,14 +11,16 @@ import multiprocessing
 
 import requests
 import generate_zk_conn_str
-import find_out_own_id
 import rebalance_partitions
 
+
+import find_out_own_id
 from broker_manager import check_broker_id_in_zk
 from broker_manager import create_broker_properties
 from health import HealthServer
 
 kafka_dir = os.getenv('KAFKA_DIR')
+kafka_data_dir = os.getenv('KAFKA_DATA_DIR')
 
 logging.basicConfig(level=getattr(logging, 'INFO', None))
 
@@ -48,17 +50,22 @@ logging.info("Got ZooKeeper connection string: " + zk_conn_str)
 def get_remote_config(file, url):
     """Get a config from a remote location (e.g. Github)."""
     logging.info("getting " + file + " file from " + url)
-    file_ = open(file, 'w')
-    file_.write(requests.get(url).text)
-    file_.close()
+    with open(file, 'w') as file_:
+        config_content = requests.get(url).text
+        file_.write(config_content)
 
 
 get_remote_config(kafka_dir + "/config/server.properties", os.getenv('SERVER_PROPERTIES'))
 get_remote_config(kafka_dir + "/config/log4j.properties", os.getenv('LOG4J_PROPERTIES'))
 
 create_broker_properties(zk_conn_str)
-broker_id = find_out_own_id.get_broker_id_by_ip()
 
+broker_policy = os.getenv('BROKER_ID_POLICY', 'ip').lower()
+logging.info("broker id policy - {}".format(broker_policy))
+
+broker_id_manager = find_out_own_id.get_broker_policy(broker_policy)
+broker_id = broker_id_manager.get_id(kafka_data_dir)
+logging.info("broker id is {}".format(broker_id))
 
 HealthServer().start()
 
@@ -66,7 +73,7 @@ reassign_process = None
 
 if os.getenv('REASSIGN_PARTITIONS') == 'yes':
     logging.info("starting reassignment script")
-    reassign_process = multiprocessing.Process(target=rebalance_partitions.run)
+    reassign_process = multiprocessing.Process(target=rebalance_partitions.run, args=[region])
     reassign_process.start()
 
 logging.info("starting kafka server ...")
@@ -101,7 +108,7 @@ def sigterm_handler(signo, stack_frame):
 signal.signal(signal.SIGTERM, sigterm_handler)
 
 try:
-    check_process = multiprocessing.Process(target=check_broker_id_in_zk, args=[broker_id, kafka_process, region])
+    check_process = multiprocessing.Process(target=check_broker_id_in_zk, args=[broker_policy, kafka_process, region])
     check_process.start()
 
     if os.getenv('REASSIGN_PARTITIONS') == 'yes' and reassign_process:

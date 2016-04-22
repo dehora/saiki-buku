@@ -73,9 +73,12 @@ def check_for_broken_partitions(zk_dict):
     return result
 
 
-def get_own_ip():
-    import requests
-    return requests.get('http://169.254.169.254/latest/dynamic/instance-identity/document').json()['privateIp']
+def get_own_ip(region):
+    if region:
+        import requests
+        return requests.get('http://169.254.169.254/latest/dynamic/instance-identity/document').json()['privateIp']
+    else:
+        return '127.0.0.1'
 
 
 def update_broker_weigths(weights, brokers):
@@ -222,11 +225,11 @@ def connect_to_zk():
     return zk
 
 
-def run():
+def run(region):
     import wait_for_kafka_startup
     logging.info("waiting for kafka to start up")
     if os.getenv('WAIT_FOR_KAFKA') != 'no':
-        wait_for_kafka_startup.run(get_own_ip())
+        wait_for_kafka_startup.run(get_own_ip(region))
     else:
         sleep(10)
 

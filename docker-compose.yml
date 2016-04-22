@@ -7,7 +7,7 @@ services:
       - "2181:2181"
       - "8181:8181"
   kafka:
-    image: kafka
+    build: ./
     environment:
       - JMX_PORT=8004
       - ZOOKEEPER_STACK_NAME=zookeeper.local
@@ -15,8 +15,9 @@ services:
       - ZOOKEEPER_PREFIX=/buku
       - REASSIGN_PARTITIONS=yes
       - STARTUP_DELAY=60
-    ports:
-      - "8004:8004"
-      - "9092:9092"
+      - BROKER_ID_POLICY=auto
+    expose:
+      - "8004"
+      - "9092"
     links:
       - exhibitor:zookeeper.local
