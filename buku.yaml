@@ -11,6 +11,9 @@ SenzaInfo:
         Description: "Which ZooKeeper node should be used as prefix?"
     - HostedZone:
         Description: "The generic Hosted Zone for your AWS account"
+    - KafkaHeapOpts:
+        Description: "JVM options for Kafka process"
+        Default: ""
 SenzaComponents:
   - Configuration:
       Type: Senza::StupsAutoConfiguration
@@ -53,6 +56,7 @@ SenzaComponents:
           ZOOKEEPER_PREFIX: "{{Arguments.ZookeeperPrefix}}"
           JMX_PORT: 8004
           REASSIGN_PARTITIONS: "yes"
+          KAFKA_HEAP_OPTS: "{{Arguments.KafkaHeapOpts}}"
         mounts:
           /data:
             partition: /dev/xvdk
