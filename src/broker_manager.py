@@ -1,11 +1,14 @@
 import logging
 import os
 import subprocess
+from time import sleep
 
+import find_out_own_id
 import generate_zk_conn_str
 import wait_for_kafka_startup
 
 kafka_dir = os.getenv('KAFKA_DIR')
+kafka_data_dir = os.getenv('KAFKA_DATA_DIR')
 
 
 def create_broker_properties(zk_conn_str):
@@ -23,7 +26,7 @@ def create_broker_properties(zk_conn_str):
     logging.info("Broker properties generated with zk connection str: " + zk_conn_str)
 
 
-def check_broker_id_in_zk(broker_id, process, region):
+def check_broker_id_in_zk(broker_id_policy, process, region):
     """
     Check endlessly for the Zookeeper Connection.
 
@@ -31,12 +34,17 @@ def check_broker_id_in_zk(broker_id, process, region):
     (we observered running brokers but missing broker id's so we implemented this check)
     and if the ZK IP's changed (e.g. due to a node restart). If this happens a Kafka restart is enforced.
     """
-    from time import sleep
     from kazoo.client import KazooClient
     zk_conn_str = os.getenv('ZOOKEEPER_CONN_STRING')
-    logging.info("check broker id...")
+    broker_id_manager = find_out_own_id.get_broker_policy(broker_id_policy)
+    broker_id = broker_id_manager.get_id(kafka_data_dir)
+    logging.info("check broker id... {}".format(broker_id))
+
+    if not broker_id:
+        broker_id = wait_for_broker_id(broker_id_manager, kafka_data_dir)
+
     while True:
-        check_kafka()
+        check_kafka(region)
 
         new_zk_conn_str = generate_zk_conn_str.run(os.getenv('ZOOKEEPER_STACK_NAME'), region)
         if zk_conn_str != new_zk_conn_str:
@@ -79,15 +87,32 @@ def check_broker_id_in_zk(broker_id, process, region):
             os.environ['WAIT_FOR_KAFKA'] = 'yes'
 
 
-def check_kafka():
-    import requests
-    try:
-        if os.getenv('WAIT_FOR_KAFKA') != 'no':
-            logging.info("wait for kafka in broker check")
-            ip = requests.get('http://169.254.169.254/latest/dynamic/instance-identity/document').json()['privateIp']
-            logging.info("wait for kafka in broker check - ip {}".format(ip))
-            wait_for_kafka_startup.run(ip)
-            logging.info("wait for kafka in broker check - ok")
-            os.environ['WAIT_FOR_KAFKA'] = 'no'
-    except:
-        logging.info("exception on checking kafka")
+def wait_for_broker_id(broker_id_manager, data_dir):
+    broker_id = None
+    logging.info("waiting for broker id")
+    while not broker_id:
+        broker_id = broker_id_manager.get_id(data_dir)
+        logging.info('read from {}, broker id {}'.format(data_dir, broker_id))
+        sleep(5)
+
+    logging.info("broker id is {}".format(broker_id))
+    return broker_id
+
+
+def check_kafka(region):
+    if not region:
+        logging.info("wait for local kafka in broker check")
+        wait_for_kafka_startup.run('127.0.0.1')
+    else:
+        import requests
+        try:
+            if os.getenv('WAIT_FOR_KAFKA') != 'no':
+                logging.info("wait for kafka in broker check")
+                ip = requests.get('http://169.254.169.254/latest/dynamic/instance-identity/document').json()[
+                    'privateIp']
+                logging.info("wait for kafka in broker check - ip {}".format(ip))
+                wait_for_kafka_startup.run(ip)
+                logging.info("wait for kafka in broker check - ok")
+                os.environ['WAIT_FOR_KAFKA'] = 'no'
+        except:
+            logging.info("exception on checking kafka")
