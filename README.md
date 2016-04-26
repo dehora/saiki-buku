@@ -22,6 +22,13 @@ Docker run option ```--net=host``` is needed, so kafka can bind the interface fr
 
 For local test, ```ZOOKEEPER_STACK_NAME``` should be set to the DNS name or IP adresse of one of your ZooKeeper node, such as in this example, ZooKeeper is running on localhost, you can set it with the host alias ```ZOOKEEPER_STACK_NAME=localhost```, or the local loopback IP like ```ZOOKEEPER_STACK_NAME=127.0.0.1```
 
+###### Docker compose
+
+You can also use ```docker-compose``` in order to run the appliance locally. Just run:
+```
+docker-compose up
+```
+
 Deployment with STUPS toolbox
 -----------------------------
 
@@ -62,6 +69,12 @@ Your Kafka Producer/Consumer can connect to this Buku cluster with its Route53 D
 
 Check the STUPS documention for additional options:
 http://docs.stups.io
+
+## Environmental variables
+
+- ```BROKER_ID_POLICY``` the algorithm for broker id, could be ```ip``` or ```auto```
+- ```KAFKA_HEAP_OPTS``` additional Kafka heap options
+
 
 ## Monitoring / Additions
 

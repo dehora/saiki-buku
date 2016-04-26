@@ -18,6 +18,8 @@ services:
       - BROKER_ID_POLICY=auto
     expose:
       - "8004"
+      - "8080"
+      - "8778"
       - "9092"
     links:
       - exhibitor:zookeeper.local
